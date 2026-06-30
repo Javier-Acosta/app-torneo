@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "openspec": "openspec",
+    "openspec:doctor": "openspec doctor",
+    "openspec:update": "openspec update",
+    "mcp:app-torneo": "node mcp-app-torneo/server.mjs",
+    "pb:schema": "node scripts/pocketbase/schema.mjs",
+    "pb:seed": "node scripts/pocketbase/seed-demo.mjs"
   },
   "dependencies": {
     "next": "16.2.9",
@@ -14,6 +20,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@fission-ai/openspec": "^1.5.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
