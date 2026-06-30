@@ -173,6 +173,160 @@ export async function getTournamentFromPocketBase(name = "Copa Apertura Padel"):
   }
 }
 
+export async function createTournamentInPocketBase(input: {
+  name: string;
+  clubName: string;
+  venue: string;
+  dateRange: string;
+  categoryName: string;
+  categoryCapacity: number;
+  playoffSize: Category["playoffSize"];
+  scoreFormat: ScoreFormat;
+  qualifierSlotsPerGroup: number;
+}) {
+  const client = new PocketBaseServerClient();
+  const tournament = await client.createRecord<PocketBaseTournamentRecord>("tournaments", {
+    name: input.name,
+    clubName: input.clubName,
+    venue: input.venue,
+    dateRange: input.dateRange,
+    status: "draft",
+    published: false,
+  });
+
+  await client.createRecord<PocketBaseCategoryRecord>("categories", {
+    tournament: tournament.id,
+    name: input.categoryName,
+    capacity: input.categoryCapacity,
+    playoffSize: String(input.playoffSize),
+    scoreFormat: input.scoreFormat,
+    qualifierSlotsPerGroup: input.qualifierSlotsPerGroup,
+  });
+
+  return tournament;
+}
+
+export async function updateTournamentDetailsInPocketBase(input: {
+  id: string;
+  name: string;
+  clubName: string;
+  venue: string;
+  dateRange: string;
+  published: boolean;
+}) {
+  const client = new PocketBaseServerClient();
+
+  return client.updateRecord<PocketBaseTournamentRecord>("tournaments", input.id, {
+    name: input.name,
+    clubName: input.clubName,
+    venue: input.venue,
+    dateRange: input.dateRange,
+    published: input.published,
+  });
+}
+
+export async function updateTournamentStatusInPocketBase(id: string, status: TournamentStatus) {
+  const client = new PocketBaseServerClient();
+
+  return client.updateRecord<PocketBaseTournamentRecord>("tournaments", id, {
+    status,
+  });
+}
+
+export async function registerPairInPocketBase(input: {
+  categoryId: string;
+  playerOneName: string;
+  playerTwoName: string;
+  requestedStatus: RegistrationStatus;
+}) {
+  const client = new PocketBaseServerClient();
+  const category = await client.getRecord<PocketBaseCategoryRecord>("categories", input.categoryId);
+  const existingPairs = await client.getFullList<PocketBasePairRecord>(
+    "pairs",
+    `category = "${escapeFilterValue(input.categoryId)}"`,
+  );
+  const confirmedCount = existingPairs.filter((pair) => pair.status === "confirmed").length;
+  const status =
+    input.requestedStatus === "confirmed" && confirmedCount >= category.capacity
+      ? "waitlisted"
+      : input.requestedStatus;
+
+  const [playerOne, playerTwo] = await Promise.all([
+    client.createRecord<PocketBasePlayerRecord>("players", { name: input.playerOneName }),
+    client.createRecord<PocketBasePlayerRecord>("players", { name: input.playerTwoName }),
+  ]);
+
+  return client.createRecord<PocketBasePairRecord>("pairs", {
+    category: input.categoryId,
+    playerOne: playerOne.id,
+    playerTwo: playerTwo.id,
+    status,
+    seed: existingPairs.length + 1,
+  });
+}
+
+export async function createCategoryInPocketBase(input: {
+  tournamentId: string;
+  name: string;
+  capacity: number;
+  playoffSize: Category["playoffSize"];
+  scoreFormat: ScoreFormat;
+  qualifierSlotsPerGroup: number;
+}) {
+  const client = new PocketBaseServerClient();
+
+  return client.createRecord<PocketBaseCategoryRecord>("categories", {
+    tournament: input.tournamentId,
+    name: input.name,
+    capacity: input.capacity,
+    playoffSize: String(input.playoffSize),
+    scoreFormat: input.scoreFormat,
+    qualifierSlotsPerGroup: input.qualifierSlotsPerGroup,
+  });
+}
+
+export async function createGroupInPocketBase(input: {
+  categoryId: string;
+  name: string;
+  displayOrder: number;
+}) {
+  const client = new PocketBaseServerClient();
+
+  return client.createRecord<PocketBaseGroupRecord>("groups", {
+    category: input.categoryId,
+    name: input.name,
+    pairs: [],
+    displayOrder: input.displayOrder,
+  });
+}
+
+export async function assignPairToGroupInPocketBase(input: {
+  categoryId: string;
+  groupId: string;
+  pairId: string;
+}) {
+  const client = new PocketBaseServerClient();
+  const groups = await client.getFullList<PocketBaseGroupRecord>(
+    "groups",
+    `category = "${escapeFilterValue(input.categoryId)}"`,
+    "displayOrder",
+  );
+
+  await Promise.all(
+    groups.map((group) => {
+      const currentPairIds = toArray(group.pairs);
+      const nextPairIds =
+        group.id === input.groupId
+          ? Array.from(new Set([...currentPairIds, input.pairId]))
+          : currentPairIds.filter((pairId) => pairId !== input.pairId);
+
+      return client.updateRecord<PocketBaseGroupRecord>("groups", group.id, {
+        pairs: nextPairIds,
+      });
+    }),
+  );
+}
+
 class PocketBaseServerClient {
   private token?: string;
   private readonly config = getPocketBaseConfig();
@@ -218,6 +372,20 @@ class PocketBaseServerClient {
     return all;
   }
 
+  async createRecord<T>(collection: string, body: Record<string, unknown>) {
+    return this.request<T>(`/api/collections/${collection}/records`, {
+      method: "POST",
+      body,
+    });
+  }
+
+  async updateRecord<T>(collection: string, id: string, body: Record<string, unknown>) {
+    return this.request<T>(`/api/collections/${collection}/records/${id}`, {
+      method: "PATCH",
+      body,
+    });
+  }
+
   private async auth() {
     if (!this.config.url || !this.config.superuserEmail || !this.config.superuserPassword) {
       throw new Error("PocketBase is not configured.");
@@ -243,11 +411,22 @@ class PocketBaseServerClient {
     this.token = data.token;
   }
 
-  private async request<T>(path: string): Promise<T> {
+  private async request<T>(
+    path: string,
+    options: {
+      method?: "GET" | "POST" | "PATCH";
+      body?: Record<string, unknown>;
+    } = {},
+  ): Promise<T> {
     if (!this.token) await this.auth();
 
     const response = await fetch(`${this.config.url}${path}`, {
-      headers: { authorization: `Bearer ${this.token}` },
+      method: options.method ?? "GET",
+      headers: {
+        authorization: `Bearer ${this.token}`,
+        ...(options.body ? { "content-type": "application/json" } : {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     });

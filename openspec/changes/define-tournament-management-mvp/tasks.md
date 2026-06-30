@@ -6,15 +6,15 @@
 
 ## 2. Tournament and Pair Management
 
-- [ ] 2.1 Implement tournament creation and editing for a single club or organizer.
-- [ ] 2.2 Implement tournament status transitions for draft, registration-open, registration-closed, in-progress, completed, and cancelled.
-- [ ] 2.3 Implement pair registration with exactly two players per entry.
-- [ ] 2.4 Implement pair registration states and capacity handling for confirmed and waitlisted pairs.
+- [x] 2.1 Implement tournament creation and editing for a single club or organizer.
+- [x] 2.2 Implement tournament status transitions for draft, registration-open, registration-closed, in-progress, completed, and cancelled.
+- [x] 2.3 Implement pair registration with exactly two players per entry.
+- [x] 2.4 Implement pair registration states and capacity handling for confirmed and waitlisted pairs.
 
 ## 3. Competition Structure
 
-- [ ] 3.1 Implement category setup for group-stage plus playoff format.
-- [ ] 3.2 Implement manual group creation and pair assignment within each category.
+- [x] 3.1 Implement category setup for group-stage plus playoff format.
+- [x] 3.2 Implement manual group creation and pair assignment within each category.
 - [x] 3.3 Implement automatic balanced group generation for confirmed pairs.
 - [ ] 3.4 Implement playoff bracket setup from configured group qualifiers.
 - [ ] 3.5 Prevent playoff seeding when required group matches are incomplete or unresolved ties require review.
